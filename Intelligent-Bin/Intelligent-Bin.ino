@@ -12,6 +12,7 @@ void setup() {
 
 void loop() {
   long duration, cm;
+  // hi i'm je-deon
 
   // 1. produce a 5us HIGH pulse in Trig
   digitalWrite(Trig, LOW);
