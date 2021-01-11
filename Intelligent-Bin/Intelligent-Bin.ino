@@ -12,9 +12,10 @@
 
 // Libraries inclusion
 #include <SoftwareSerial.h>
+#include "secret.h"
 
 // Constant Definition
-#define DEBUG true
+#define DEBUG false
 
 // Global Variable Declaration
 const int redLEDPin = 6; // Red LED 
@@ -25,13 +26,19 @@ const int dipPins[4] = {13, 12, 11, 10};
 
 int errorSend = 0;
 int UID = 0;
+int binState = 1;
 int greenLEDState = LOW;
 long distance;
 long height;
-long timeIntervalSendData = 1000; // 160 seconds
+long timeIntervalSendData = 1000 * 60 * 30; // 30 minutes
+long timeIntervalGetData = 1000 * 16; // 16 seconds
 unsigned long previousTimeBlinkLED = millis();
 unsigned long previousTimeSendData = millis();
-String thingspeakAPI = ""; // REPLACE WITH YOUR THINGSSPEAK API KEY
+unsigned long previousTimeGetData = millis();
+String thingspeakWriteAPI = WRITEAPIKEY; // REPLACE WITH YOUR THINGSSPEAK API WRITE KEY
+String thingspeakReadAPI = WRITEAPIKEY; // REPLACE WITH YOUR THINGSSPEAK API READ KEY
+String ssid = SECRET_SSID; // REPLACE WITH UR WIFI CREDENTIALS
+String pass = SECRET_PASS; // REPLACE WITH UR WIFI CREDENTIALS
 
 // Class Declaration
 SoftwareSerial ESP01(2, 3); // RX, TX
@@ -67,7 +74,6 @@ void loop() {
 
   // Dip Switch Identifier
   UID = digitalRead(dipPins[0]) + ( digitalRead(dipPins[1]) * 2 ) + ( digitalRead(dipPins[2]) * 4 ) + ( digitalRead(dipPins[3]) * 8 );
-  // Serial.println();
   // Serial.print("UID: ");
   // Serial.println(UID);
 
@@ -83,6 +89,12 @@ void loop() {
   if (currentTime-previousTimeSendData > timeIntervalSendData && !errorSend) {
     previousTimeSendData = currentTime;
     updateData(distance);
+  }
+
+  // Wi-Fi module, send data to ThingSpeak
+  if (currentTime-previousTimeGetData > timeIntervalGetData && !errorSend) {
+    previousTimeGetData = currentTime;
+    retrieveData();
   }
 
   delay(500); // 0.5s
@@ -133,22 +145,20 @@ void controlLED(unsigned long currentTime, int distance) {
 void connectWiFi() {
   sendCommand("AT+RST\r\n",2000,DEBUG); // Reset module
   sendCommand("AT+CWMODE=1\r\n",2000,DEBUG); // Set station mode
-  sendCommand("AT+CWJAP=\"SSID\",\"PASSWORD\"\r\n",4000,DEBUG); // Connect Wi-Fi network (REPLACE WITH UR WIFI CREDENTIALS)
+  sendCommand("AT+CWJAP=\"" + ssid + "\",\"" + pass + "\"\r\n",4000,DEBUG); // Connect Wi-Fi network
   sendCommand("AT+CIPMUX=0\r\n",2000,DEBUG); // Set single-ip connection
   Serial.println("> Wi-Fi Connected!");
-  sendCommand("AT+CIFSR\r\n",2000,DEBUG); // SHOW IP ADDRESS
+  // sendCommand("AT+CIFSR\r\n",2000,DEBUG); // SHOW IP ADDRESS
 }
 
 void updateData(int distance) {
   // Make TCP connection
-  String cmd = "AT+CIPSTART=\"TCP\",\"";
-  cmd += "54.210.227.170"; // Thingspeak.com's IP address  
-  cmd += "\",80\r\n";
+  String cmd = "AT+CIPSTART=\"TCP\",\"54.210.227.170\",80\r\n";
   sendCommand(cmd,2000,DEBUG);
 
   // Prepare GET string
   String getStr = "GET /update?api_key=";
-  getStr += thingspeakAPI;
+  getStr += thingspeakWriteAPI;
   getStr +="&field1=";
   getStr += distance;
   getStr += "\r\n"; // Last line for Line feed
@@ -171,6 +181,41 @@ void updateData(int distance) {
   }
 }
 
+void retrieveData() {
+  // Make TCP connection
+  String cmd = "AT+CIPSTART=\"TCP\",\"54.210.227.170\",80\r\n";
+  sendCommand(cmd,2000,DEBUG);
+
+  // Prepare GET string
+  String getStr = "GET /channels/1279514/fields/2/last.txt?api_key=";
+  getStr += thingspeakReadAPI;
+  getStr += "\r\n"; // Last line for Line feed
+  
+  // Send data length & GET string
+  ESP01.print("AT+CIPSEND=");
+  ESP01.println (getStr.length());
+  delay(500);
+
+  if(ESP01.find( ">" )) { 
+    // Serial.print(">");
+    // Serial.println(getStr);
+    String reply = sendCommand(getStr,2000,DEBUG);
+    char num = reply.length();
+
+    if (reply[num-9] == '1') {
+      // "Turn on" the Aurdino
+    } else if (reply[num-9] == '0') {
+      // "Turn off" the Aurdino
+    }
+  } else {
+    Serial.println("Error sending data, please check WiFi and restart...");
+    errorSend = 1;
+    // Close connection, wait a while before repeating...
+    // sendCommand("AT+CIPCLOSE",2000,DEBUG);
+    // connectWiFi();
+  }
+}
+
 String sendCommand(String command, const int timeout, boolean debug) {
     String response = "";
     ESP01.print(command);
@@ -179,7 +224,7 @@ String sendCommand(String command, const int timeout, boolean debug) {
     while((time+timeout) > millis()) {
       while(ESP01.available()) {
         // "Construct" response from ESP01 as follows 
-         // - this is to be displayed on Serial Monitor. 
+        // - this is to be displayed on Serial Monitor. 
         char c = ESP01.read(); // read the next character.
         response += c;
       }  
@@ -189,5 +234,5 @@ String sendCommand(String command, const int timeout, boolean debug) {
       Serial.println(response);
     }
     
-    return (response);
+    return response;
 }
