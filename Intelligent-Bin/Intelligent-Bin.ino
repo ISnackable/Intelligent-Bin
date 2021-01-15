@@ -24,13 +24,14 @@ const int trigPin = 8; // Ultrasonic ranger: trigPin
 const int echoPin = 9; // Ultrasonic ranger: echoPin
 const int dipPins[4] = {13, 12, 11, 10};
 
+int sleepState = 0;
 int errorSend = 0;
 int UID = 0;
 int binState = 1;
 int greenLEDState = LOW;
 long distance;
 long height;
-long timeIntervalSendData = 1000 * 60 * 30; // 30 minutes
+long timeIntervalSendData = 1800000; // 30 minutes
 long timeIntervalGetData = 1000 * 16; // 16 seconds
 unsigned long previousTimeBlinkLED = millis();
 unsigned long previousTimeSendData = millis();
@@ -72,6 +73,19 @@ void setup() {
 void loop() {
   unsigned long currentTime = millis();
 
+  // Wi-Fi module, retrieve data to ThingSpeak
+  if (currentTime-previousTimeGetData > timeIntervalGetData && !errorSend) {
+      previousTimeGetData = currentTime;
+      retrieveData();
+  }
+
+  if (sleepState == 1) {
+    digitalWrite(redLEDPin, LOW);
+    digitalWrite(greenLEDPin, LOW);
+    // digitalWrite(yellowLEDPin, LOW);
+    return;
+  }
+
   // Dip Switch Identifier
   UID = digitalRead(dipPins[0]) + ( digitalRead(dipPins[1]) * 2 ) + ( digitalRead(dipPins[2]) * 4 ) + ( digitalRead(dipPins[3]) * 8 );
   // Serial.print("UID: ");
@@ -89,12 +103,6 @@ void loop() {
   if (currentTime-previousTimeSendData > timeIntervalSendData && !errorSend) {
     previousTimeSendData = currentTime;
     updateData(distance);
-  }
-
-  // Wi-Fi module, send data to ThingSpeak
-  if (currentTime-previousTimeGetData > timeIntervalGetData && !errorSend) {
-    previousTimeGetData = currentTime;
-    retrieveData();
   }
 
   delay(500); // 0.5s
@@ -121,7 +129,7 @@ void controlLED(unsigned long currentTime, int distance) {
   digitalWrite(redLEDPin, LOW);
   digitalWrite(greenLEDPin, LOW);
 
-  if (distance < (height * 0.10)) {
+  if (distance > 0 && distance < (height * 0.10)) {
     // If bin is 90% filled, green LED blink
     if (currentTime-previousTimeBlinkLED > 500) {
       previousTimeBlinkLED = currentTime;
@@ -133,7 +141,7 @@ void controlLED(unsigned long currentTime, int distance) {
       digitalWrite(greenLEDPin, greenLEDState);
     }
     Serial.println("Bin is full!");
-  } else if (distance < (height * 0.25)) {
+  } else if (distance > 0 && distance < (height * 0.25)) {
     // If bin is 75% filled, yellow LED on
     // digitalWrite(yellowLEDPin, HIGH);
     Serial.println("Bin is partially full.");
@@ -203,9 +211,9 @@ void retrieveData() {
     char num = reply.length();
 
     if (reply[num-9] == '1') {
-      // "Turn on" the Aurdino
+      sleepState = 0;
     } else if (reply[num-9] == '0') {
-      // "Turn off" the Aurdino
+      sleepState = 1;
     }
   } else {
     Serial.println("Error sending data, please check WiFi and restart...");
