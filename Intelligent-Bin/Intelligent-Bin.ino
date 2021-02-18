@@ -31,13 +31,13 @@ int binState = 1;
 int greenLEDState = LOW;
 long distance;
 long height;
-long timeIntervalSendData = 1800000; // 30 minutes
+long timeIntervalSendData =  1000* 20; // 1800000; // 30 minutes (DEMO 20s)
 long timeIntervalGetData = 1000 * 16; // 16 seconds
 unsigned long previousTimeBlinkLED = millis();
 unsigned long previousTimeSendData = millis();
 unsigned long previousTimeGetData = millis();
 String thingspeakWriteAPI = WRITEAPIKEY; // REPLACE WITH YOUR THINGSSPEAK API WRITE KEY
-String thingspeakReadAPI = WRITEAPIKEY; // REPLACE WITH YOUR THINGSSPEAK API READ KEY
+String thingspeakReadAPI = READAPIKEY; // REPLACE WITH YOUR THINGSSPEAK API READ KEY
 String ssid = SECRET_SSID; // REPLACE WITH UR WIFI CREDENTIALS
 String pass = SECRET_PASS; // REPLACE WITH UR WIFI CREDENTIALS
 
@@ -129,8 +129,8 @@ void controlLED(unsigned long currentTime, int distance) {
   digitalWrite(redLEDPin, LOW);
   digitalWrite(greenLEDPin, LOW);
 
-  if (distance > 0 && distance < (height * 0.10)) {
-    // If bin is 90% filled, green LED blink
+  if (distance > 0 && distance < (height * 0.20)) {
+    // If bin is 80% filled, green LED blink
     if (currentTime-previousTimeBlinkLED > 500) {
       previousTimeBlinkLED = currentTime;
       if (greenLEDState == HIGH) {
@@ -182,7 +182,8 @@ void updateData(int distance) {
     sendCommand(getStr,2000,DEBUG);
   } else {
     Serial.println("Error sending data, please check WiFi and restart...");
-    errorSend = 1;
+    // Note: Unreliable Wi-Fi causes AT-CIPSEND to fail.
+    // errorSend = 1;
     // Close connection, wait a while before repeating...
     // sendCommand("AT+CIPCLOSE",2000,DEBUG);
     // connectWiFi();
@@ -217,7 +218,7 @@ void retrieveData() {
     }
   } else {
     Serial.println("Error sending data, please check WiFi and restart...");
-    errorSend = 1;
+    // errorSend = 1;
     // Close connection, wait a while before repeating...
     // sendCommand("AT+CIPCLOSE",2000,DEBUG);
     // connectWiFi();
